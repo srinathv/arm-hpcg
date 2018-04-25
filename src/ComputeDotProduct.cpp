@@ -12,24 +12,37 @@
 // ***************************************************
 //@HEADER
 
+/*
+ * Copyright (c) 2018, Barcelona Supercomputing Center
+ * All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions are met: 
+ * redistributions of source code must retain the above copyright notice, this 
+ * list of conditions and the following disclaimer; redistributions in binary form
+ * must reproduce the above copyright notice, this list of conditions and the 
+ * following disclaimer in the documentation and/or other materials provided with 
+ * the distribution; neither the name of the copyright holder nor the names of its 
+ * contributors may be used to endorse or promote products derived from this 
+ * software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE 
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER 
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, 
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 /*!
  @file ComputeDotProduct.cpp
 
  HPCG routine
  */
-
-#ifndef HPCG_NO_MPI
-#include <mpi.h>
-#include "mytimer.hpp"
-#endif
-#ifndef HPCG_NO_OPENMP
-#include "omp.h"
-#endif
-#include <cassert>
-
-#ifdef HPCG_USE_OPTIMIZED_BLAS
-#include "armpl.h"
-#endif
 
 #include "ComputeDotProduct.hpp"
 #include "ComputeDotProduct_ref.hpp"
@@ -53,126 +66,49 @@
 */
 int ComputeDotProduct(const local_int_t n, const Vector & x, const Vector & y,
     double & result, double & time_allreduce, bool & isOptimized) {
-  assert(x.localLength>=n); // Test vector lengths
-  assert(y.localLength>=n);
+	assert(x.localLength>=n);
+	assert(y.localLength>=n);
 
-  double local_result = 0.0;
-  double * xv = x.values;
-  double * yv = y.values;
-  /*
-   * Try to unroll to 8, 4 or 2, if not possible, don't do anything
-   */
-  if ( n % 8 == 0 ) {
-	  double local_result1, local_result2, local_result3, local_result4;
-	  double local_result5, local_result6, local_result7, local_result8;
-	  local_result1 = local_result2 = local_result3 = local_result4 = 0.0;
-	  local_result5 = local_result6 = local_result7 = local_result8 = 0.0;
-    if (yv==xv) {
+	double local_result = 0.0;
+	double *xv = x.values;
+	double *yv = y.values;
+
+#ifdef HPCG_USE_ARMPL
+	/*
+	 * Use the cblas_ddot function.
+	 * This function is parallelized by the Arm Performance Libraries if using
+	 * the OpenMP version of the library.
+	 */
+	local_result = cblas_ddot(n, xv, 1, yv, 1);
+#else
+	if ( yv == xv ) {
 #ifndef HPCG_NO_OPENMP
-    #pragma omp parallel for reduction (+:local_result1,local_result2,local_result3,local_result4,local_result5,local_result6,local_result7,local_result8)
+#pragma omp parallel for reduction (+:local_result)
 #endif
-      for (local_int_t i=0; i<n; i+=8) {
-      	local_result1 += xv[i  ]*xv[i  ];
-      	local_result2 += xv[i+1]*xv[i+1];
-      	local_result3 += xv[i+2]*xv[i+2];
-      	local_result4 += xv[i+3]*xv[i+3];
-      	local_result5 += xv[i+4]*xv[i+4];
-      	local_result6 += xv[i+5]*xv[i+5];
-      	local_result7 += xv[i+6]*xv[i+6];
-      	local_result8 += xv[i+7]*xv[i+7];
-      }
-    } else {
+		for ( local_int_t i = 0; i < n; i++ ) {
+			local_result += xv[i] * xv[i];
+		}
+	} else {
 #ifndef HPCG_NO_OPENMP
-    #pragma omp parallel for reduction (+:local_result1,local_result2,local_result3,local_result4,local_result5,local_result6,local_result7,local_result8)
+#pragma omp parallel for reduction (+:local_result)
 #endif
-      for (local_int_t i=0; i<n; i+=8) {
-      	local_result1 += xv[i  ]*yv[i  ];
-      	local_result2 += xv[i+1]*yv[i+1];
-      	local_result3 += xv[i+2]*yv[i+2];
-      	local_result4 += xv[i+3]*yv[i+3];
-      	local_result5 += xv[i+4]*yv[i+4];
-      	local_result6 += xv[i+5]*yv[i+5];
-      	local_result7 += xv[i+6]*yv[i+6];
-      	local_result8 += xv[i+7]*yv[i+7];
-      }
-    }
-	local_result = local_result1 + local_result2 + local_result3 + local_result4 + local_result5 + local_result6 + local_result7 + local_result8;
-  } else if ( n % 4  == 0 ) {
-	  double local_result1, local_result2, local_result3, local_result4;
-	  local_result1 = local_result2 = local_result3 = local_result4 = 0.0;
-    if (yv==xv) {
-#ifndef HPCG_NO_OPENMP
-    #pragma omp parallel for reduction (+:local_result1,local_result2,local_result3,local_result4)
+		for ( local_int_t i = 0; i < n; i++ ) {
+			local_result += xv[i] * yv[i];
+		}
+	}
 #endif
-      for (local_int_t i=0; i<n; i+=4) {
-      	local_result1 += xv[i  ]*xv[i  ];
-      	local_result2 += xv[i+1]*xv[i+1];
-      	local_result3 += xv[i+2]*xv[i+2];
-      	local_result4 += xv[i+3]*xv[i+3];
-      }
-    } else {
-#ifndef HPCG_NO_OPENMP
-    #pragma omp parallel for reduction (+:local_result1,local_result2,local_result3,local_result4)
-#endif
-      for (local_int_t i=0; i<n; i+=4) {
-      	local_result1 += xv[i  ]*yv[i  ];
-      	local_result2 += xv[i+1]*yv[i+1];
-      	local_result3 += xv[i+2]*yv[i+2];
-      	local_result4 += xv[i+3]*yv[i+3];
-      }
-    }
-	local_result = local_result1 + local_result2 + local_result3 + local_result4;
-  } else if ( n % 2 == 0) {
-	  double local_result1, local_result2;
-	  local_result1 = local_result2 = 0.0;
-    if (yv==xv) {
-#ifndef HPCG_NO_OPENMP
-    #pragma omp parallel for reduction (+:local_result1,local_result2)
-#endif
-      for (local_int_t i=0; i<n; i+=2) {
-      	local_result1 += xv[i  ]*xv[i  ];
-      	local_result2 += xv[i+1]*xv[i+1];
-      }
-    } else {
-#ifndef HPCG_NO_OPENMP
-    #pragma omp parallel for reduction (+:local_result1,local_result2)
-#endif
-      for (local_int_t i=0; i<n; i+=2) {
-      	local_result1 += xv[i  ]*yv[i  ];
-      	local_result2 += xv[i+1]*yv[i+1];
-      }
-    }
-	local_result = local_result1 + local_result2;
-  } else {
-    if (yv==xv) {
-#ifndef HPCG_NO_OPENMP
-    #pragma omp parallel for reduction (+:local_result)
-#endif
-      for (local_int_t i=0; i<n; i++) {
-      	local_result += xv[i]*xv[i];
-      }
-    } else {
-#ifndef HPCG_NO_OPENMP
-    #pragma omp parallel for reduction (+:local_result)
-#endif
-      for (local_int_t i=0; i<n; i++) {
-      	local_result += xv[i]*yv[i];
-      }
-    }
-  }
 
 #ifndef HPCG_NO_MPI
-  // Use MPI's reduce function to collect all partial sums
-  double t0 = mytimer();
-  double global_result = 0.0;
-  MPI_Allreduce(&local_result, &global_result, 1, MPI_DOUBLE, MPI_SUM,
-      MPI_COMM_WORLD);
-  result = global_result;
-  time_allreduce += mytimer() - t0;
+	// Use MPI's reduce function to collect all the partial sums
+	double t0 = mytimer();
+	double global_result = 0.0;
+	MPI_Allreduce(&local_result, &global_result, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+	result = global_result;
+	time_allreduce += mutimer() - t0;
 #else
-  time_allreduce += 0.0;
-  result = local_result;
+	time_allreduce += 0.0;
+	result = local_result;
 #endif
 
-  return 0;
+	return 0;
 }

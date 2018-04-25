@@ -1,0 +1,12 @@
+For more information and an evaluation of the shared memory improved version of the code on Cavium ThunderX2, please check the following technical report:
+    https://upcommons.upc.edu/handle/2117/116642
+Please include a reference to the above technical report in documents/publications/presentations where this code is used:
+    Ruiz, D. [et al.]. "The HPCG benchmark: analysis, shared memory preliminary improvements and evaluation on an Arm-based platform". 2018.
+
+Author of shared memory improvements:
+    Daniel Ruiz (Barcelona Supercomputing Center)
+Credits:
+    Filippo Mantovani (Barcelona Supercomputing Center)
+    Marc Casas (Barcelona Supercomputing Center)
+    Jesus Labarta (Barcelona Supercomputing Center)
+    Filippo Spiga (Arm Ltd)
