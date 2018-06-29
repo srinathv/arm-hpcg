@@ -41,8 +41,34 @@
 */
 int ComputeWAXPBY(const local_int_t n, const double alpha, const Vector & x,
     const double beta, const Vector & y, Vector & w, bool & isOptimized) {
+	assert(x.localLength>=n); // Test vector lengths
+	assert(y.localLength>=n);
 
-  // This line and the next two lines should be removed and your version of ComputeWAXPBY should be used.
-  isOptimized = false;
-  return ComputeWAXPBY_ref(n, alpha, x, beta, y, w);
+	const double * const xv = x.values;
+	const double * const yv = y.values;
+	double * const wv = w.values;
+
+	if (alpha==1.0 && beta==1.0) {
+#ifndef HPCG_NO_OPENMP
+#pragma omp parallel for
+#endif
+		for (local_int_t i=0; i<n; i++) wv[i] = xv[i] * yv[i];
+	} else if (alpha==1.0) {
+#ifndef HPCG_NO_OPENMP
+#pragma omp parallel for
+#endif
+		for (local_int_t i=0; i<n; i++) wv[i] = xv[i] + beta * yv[i];
+	} else if (beta==1.0) {
+#ifndef HPCG_NO_OPENMP
+#pragma omp parallel for
+#endif
+		for (local_int_t i=0; i<n; i++) wv[i] = alpha * xv[i] + yv[i];
+	} else  {
+#ifndef HPCG_NO_OPENMP
+#pragma omp parallel for
+#endif
+		for (local_int_t i=0; i<n; i++) wv[i] = alpha * xv[i] + beta * yv[i];
+	}
+
+	return 0;
 }

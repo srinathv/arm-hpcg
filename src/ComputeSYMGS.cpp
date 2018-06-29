@@ -20,6 +20,13 @@
 
 #include "ComputeSYMGS.hpp"
 #include "ComputeSYMGS_ref.hpp"
+#ifndef HPCG_NO_MPI
+#include "ExchangeHalo.hpp"
+#endif
+#include <cassert>
+#ifndef HPCG_NO_OPENMP
+#include <omp.h>
+#endif
 
 /*!
   Routine to compute one step of symmetric Gauss-Seidel:
@@ -48,8 +55,76 @@
   @see ComputeSYMGS_ref
 */
 int ComputeSYMGS( const SparseMatrix & A, const Vector & r, Vector & x) {
+	assert(x.localLength==A.localNumberOfColumns); // Make sure x contain space for halo values
 
-  // This line and the next two lines should be removed and your version of ComputeSYMGS should be used.
-  return ComputeSYMGS_ref(A, r, x);
+#ifndef HPCG_NO_MPI
+	ExchangeHalo(A,x);
+#endif
+
+	const local_int_t nrow = A.localNumberOfRows;
+	double ** matrixDiagonal = A.matrixDiagonal;  // An array of pointers to the diagonal entries A.matrixValues
+	const double * const rv = r.values;
+	double * const xv = x.values;
+
+	// Check some premises
+	// 1. number of threads is a divisor of nz
+	assert(A.geom->nz % A.geom->numThreads  == 0);
+	// 2. Number of colors to be used is a divisor of nz
+	assert(A.geom->nz % (A.geom->nz / A.geom->numThreads) == 0);
+
+	const local_int_t numberOfColors = A.geom->nz / A.geom->numThreads;
+	const local_int_t slicesPerColor = A.geom->nz / numberOfColors;
+	const local_int_t sliceSize = A.geom->nx * A.geom->ny;
+
+	for ( local_int_t color = 0; color < numberOfColors; color++ ) {
+#ifndef HPCG_NO_OPENMP
+#pragma omp parallel for
+#endif
+		for ( local_int_t k = 0; k < slicesPerColor; k++ ) {
+			local_int_t firstRow = sliceSize * numberOfColors * omp_get_thread_num() + color * sliceSize;
+			local_int_t lastRow = firstRow + sliceSize;
+
+			// Forward sweep
+			for ( local_int_t i = firstRow; i < lastRow; i++ ) {
+				const double *const currentValues = A.matrixValues[i];
+				const local_int_t *const currentColIndices = A.mtxIndL[i];
+				const int currentNumberOfNonzeros = A.nonzerosInRow[i];
+				const double currentDiagonal = matrixDiagonal[i][0]; // Current diagonal value
+
+				double sum = rv[i]; //RHS value
+				for ( local_int_t j = 0; j < currentNumberOfNonzeros; j++ ) {
+					sum -= currentValues[j] * xv[currentColIndices[j]];
+				}
+				sum += xv[i] * currentDiagonal; // Remove diagonal contribution from previous loop
+				xv[i] = sum / currentDiagonal;
+			}
+		}
+	}
+	for ( local_int_t color = numberOfColors - 1; color >= 0; color-- ) {
+#ifndef HPCG_NO_OPENMP
+#pragma omp parallel for
+#endif
+		for ( local_int_t k = slicesPerColor - 1; k >= 0; k-- ) {
+			local_int_t firstRow = sliceSize * numberOfColors * omp_get_thread_num() + color * sliceSize;
+			local_int_t lastRow = firstRow + sliceSize;
+
+			// Back sweep
+			for ( local_int_t i = lastRow - 1; i >= firstRow; i-- ) {
+				const double *const currentValues = A.matrixValues[i];
+				const local_int_t *const currentColIndices = A.mtxIndL[i];
+				const int currentNumberOfNonzeros = A.nonzerosInRow[i];
+				const double currentDiagonal = matrixDiagonal[i][0]; // Current diagonal value
+
+				double sum = rv[i]; // RHS value
+				for ( local_int_t j = 0; j < currentNumberOfNonzeros; j++ ) {
+					sum -= currentValues[j] * xv[currentColIndices[j]];
+				}
+				sum += xv[i] * currentDiagonal; // Remove diagonal contribution from previous loop
+				xv[i] = sum / currentDiagonal;
+			}
+		}
+	}
+
+	return 0;
 
 }
