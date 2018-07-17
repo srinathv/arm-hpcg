@@ -1,0 +1,31 @@
+################################################################################
+# HPCG colored versions
+################################################################################
+
+This version of the code provides an implementation of the HPCG benchmark using multi-block color reordering. The blocks are xy planes (or as we call them, slices). Once the slices are created, we colorize them so slices with the same color do not contain any element with direct dependencies with another element contained in a slice with the same color. Therefore, all the slices with the same color can be processed in parallel. The main difference compared to the multi-color reordering is that elements within the same slice are now accessed sequentally, thus improving data locality. The thickness of the slices and the amount of colors used for each level of the multi-grid is computed at runtime.
+
+Some specific rules must be fulfilled in order to run this code:
+
+  * nz % OMP_NUM_THREADS == 0
+    * For each value of nz of every level of the multi-grid (i.e., if nz=128, then the nz values for the four levels of the multi-grid are 128, 64, 32 and 16)
+  * nz % (nz / OMP_NUM_THREADS) == 0
+    * For each value of nz of every level of the multi-grid
+
+There are not any specific instructions to build this version, use the appropiate Makefile for your hardware and software configuration.
+
+################################################################################
+################################################################################
+
+For more information and an evaluation of the shared memory improved version of the code on Cavium ThunderX2, please check the following technical report:
+    https://upcommons.upc.edu/handle/2117/116642
+Please include a reference to the above technical report in documents/publications/presentations where this code is used:
+    Ruiz, D. [et al.]. "The HPCG benchmark: analysis, shared memory preliminary improvements and evaluation on an Arm-based platform". 2018.
+
+Author of shared memory improvements:
+    Daniel Ruiz (Barcelona Supercomputing Center)
+Credits:
+    Filippo Mantovani (Barcelona Supercomputing Center)
+    Marc Casas (Barcelona Supercomputing Center)
+    Jesus Labarta (Barcelona Supercomputing Center)
+    Filippo Spiga (Arm Ltd)
+
