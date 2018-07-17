@@ -1,3 +1,43 @@
+################################################################################
+# HPCG colored versions
+################################################################################
+
+## General information ##
+
+Different implementations are provided int this version of the code:
+
+  * Multi-color reordering
+  * Multi-block color reordering
+  * ComputeDotProduct using Arm Performance Libraries
+
+Except the ComputeDotProduct one, each of them is an exclusive (i.e., is not possible to use multi-color and multi-block color reordering at the same time).
+
+## Multi-color reordering ##
+
+This implementation colorizes each element of the grid using a naive algorithm. After the coloring, elements with the same color do not have direct dependencies, therefore, they can be compute in parallel. The tradeoff of this version is that the reorder incurs in a higher cache missratio compared to the reference code. The reason behind is that after the reordering, elements are not accessed sequentally thus decreasing data locality.
+
+To build this implementation, use the Make.GCC_OMP_COLORING or the Make.MPI_GCC_OMP_COLORING provided.
+
+## Multi-block color reordering ##
+
+This implementation splits the grid in xy planes (or as we call them, slices). Once the slices are created, we colorize them so slices with the same color do not contain any element with direct dependencies with another element contained in a slice with the same color. Therefore, all the slices with the same color can be processed in parallel. The main difference compared to the multi-color reordering is that elements within the same slice are now accessed sequentally, thus improving data locality.
+
+To build this implementation, use the Make.GCC_OMP_SLICE_COLORING or the Make.MPI_GCC_OMP_SLICE_COLORING provided. You MUST change the LAYERS_PER_BLOCK and NCOLORS values depending on the input you are going to run. The following rules must be fulfilled.
+
+  * nz % LAYERS_PER_BLOCK == 0
+    * For each value of nz of every level of the multi-grid (i.e., if nz=128, then the nz values for the four levels of the multi-grid will be 128, 64, 32 and 16)
+  * (nz / LAYERS_PER_BLOCK) % NCOLORS == 0
+    * For each value of nz of every level of the multi-grid
+
+You need to take into account that the amount of slices per color is determined by the dividing nz per NCOLORS. If this number is less than the OpenMP threads, then some threads will be idle during the ComputeSYMGS.
+
+## ComputeDotProduct using ArmPL ##
+
+To enable the use of the Arm Performance Libraries for the ComputeDotProduct kernel, you need to define HPCG_USE_ARMPL on your Makefile. An example is provided at the Make.GCC_OMP_ARMPL file.
+
+################################################################################
+################################################################################
+
 For more information and an evaluation of the shared memory improved version of the code on Cavium ThunderX2, please check the following technical report:
     https://upcommons.upc.edu/handle/2117/116642
 Please include a reference to the above technical report in documents/publications/presentations where this code is used:
