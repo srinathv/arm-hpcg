@@ -81,7 +81,11 @@ int ComputeSYMGS( const SparseMatrix & A, const Vector & r, Vector & x) {
 #pragma omp parallel for
 #endif
 		for ( local_int_t k = 0; k < slicesPerColor; k++ ) {
+#ifndef HPCG_NO_OPENMP
 			local_int_t firstRow = sliceSize * numberOfColors * omp_get_thread_num() + color * sliceSize;
+#else
+			local_int_t firstRow = color * sliceSize;
+#endif
 			local_int_t lastRow = firstRow + sliceSize;
 
 			// Forward sweep
@@ -105,7 +109,11 @@ int ComputeSYMGS( const SparseMatrix & A, const Vector & r, Vector & x) {
 #pragma omp parallel for
 #endif
 		for ( local_int_t k = slicesPerColor - 1; k >= 0; k-- ) {
+#ifndef HPCG_NO_OPENMP
 			local_int_t firstRow = sliceSize * numberOfColors * omp_get_thread_num() + color * sliceSize;
+#else
+			local_int_t firstRow = color * sliceSize;
+#endif
 			local_int_t lastRow = firstRow + sliceSize;
 
 			// Back sweep
