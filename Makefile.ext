@@ -39,7 +39,9 @@ HPCG_DEPS = src/CG.o \
 	    src/ComputeMG_ref.o \
 	    src/ComputeMG.o \
 	    src/ComputeProlongation_ref.o \
+	    src/ComputeProlongation.o \
 	    src/ComputeRestriction_ref.o \
+	    src/ComputeRestriction.o \
 	    src/CheckAspectRatio.o \
 	    src/OutputFile.o \
 	    src/GenerateCoarseProblem.o \
@@ -168,7 +170,13 @@ src/ComputeMG.o: HPCG_SRC_PATH/src/ComputeMG.cpp HPCG_SRC_PATH/src/ComputeMG.hpp
 src/ComputeProlongation_ref.o: HPCG_SRC_PATH/src/ComputeProlongation_ref.cpp HPCG_SRC_PATH/src/ComputeProlongation_ref.hpp $(PRIMARY_HEADERS)
 	$(CXX) -c $(CXXFLAGS) -IHPCG_SRC_PATH/src $< -o $@
 
+src/ComputeProlongation.o: HPCG_SRC_PATH/src/ComputeProlongation.cpp HPCG_SRC_PATH/src/ComputeProlongation.hpp $(PRIMARY_HEADERS)
+	$(CXX) -c $(CXXFLAGS) -IHPCG_SRC_PATH/src $< -o $@
+
 src/ComputeRestriction_ref.o: HPCG_SRC_PATH/src/ComputeRestriction_ref.cpp HPCG_SRC_PATH/src/ComputeRestriction_ref.hpp $(PRIMARY_HEADERS)
+	$(CXX) -c $(CXXFLAGS) -IHPCG_SRC_PATH/src $< -o $@
+
+src/ComputeRestriction.o: HPCG_SRC_PATH/src/ComputeRestriction.cpp HPCG_SRC_PATH/src/ComputeRestriction.hpp $(PRIMARY_HEADERS)
 	$(CXX) -c $(CXXFLAGS) -IHPCG_SRC_PATH/src $< -o $@
 
 src/GenerateCoarseProblem.o: HPCG_SRC_PATH/src/GenerateCoarseProblem.cpp HPCG_SRC_PATH/src/GenerateCoarseProblem.hpp $(PRIMARY_HEADERS)

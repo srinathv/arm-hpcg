@@ -1,4 +1,3 @@
-
 //@HEADER
 // ***************************************************
 //
@@ -12,12 +11,9 @@
 // ***************************************************
 //@HEADER
 
-#ifndef COMPUTESYMGS_HPP
-#define COMPUTESYMGS_HPP
-#include "SparseMatrix.hpp"
+#ifndef COMPUTEPROLONGATION_HPP
+#define COMPUTEPROLONGATION_HPP
 #include "Vector.hpp"
-
-int ComputeSYMGS( const SparseMatrix  & A, const Vector & r, Vector & x );
-int ComputeFusedSYMGS_SPMV( const SparseMatrix  & A, const Vector & r, Vector & x, Vector & y );
-
-#endif // COMPUTESYMGS_HPP
+#include "SparseMatrix.hpp"
+int ComputeProlongation(const SparseMatrix & Af, Vector & xf);
+#endif // COMPUTEPROLONGATION_HPP

@@ -23,6 +23,7 @@
 #endif
 
 #include <vector>
+#include <unistd.h>
 #include "ReportResults.hpp"
 #include "OutputFile.hpp"
 #include "OptimizeProblem.hpp"
@@ -208,7 +209,11 @@ void ReportResults(const SparseMatrix & A, int numberOfMgLevels, int numberOfCgS
     double fnbytesPerEquation = fnbytes/fnrow;
 
     // Instantiate YAML document
-    OutputFile doc("HPCG-Benchmark", "3.0");
+	char execConf[25];
+	char hostname[25];
+	gethostname(hostname, 25);
+	sprintf(execConf, "%s-%dranks-%dthreads", hostname, A.geom->size, A.geom->numThreads);
+	OutputFile doc(execConf, "HPCG-Benchmark_3.0");
     doc.add("Release date", "November 11, 2015");
 
     doc.add("Machine Summary","");

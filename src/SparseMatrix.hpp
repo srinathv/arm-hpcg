@@ -26,9 +26,10 @@
 #include "Geometry.hpp"
 #include "Vector.hpp"
 #include "MGData.hpp"
-#if __cplusplus <= 201103L
+#if __cplusplus < 201103L
 // for C++03
 #include <map>
+#warning Using std::map, it is strongly recommended to use std::unordered_map. For this, use -std=c++11
 typedef std::map< global_int_t, local_int_t > GlobalToLocalMap;
 #else
 // for C++11 or greater
@@ -62,7 +63,23 @@ struct SparseMatrix_STRUCT {
   mutable struct SparseMatrix_STRUCT * Ac; // Coarse grid matrix
   mutable MGData * mgData; // Pointer to the coarse level data for this fine matrix
   void * optimizationData;  // pointer that can be used to store implementation-specific data
+  /*
+   * Optimization data
+   */
+  std::vector<local_int_t> whichNewRowIsOldRow;
+  std::vector<local_int_t> whichOldRowIsNewRow;
+  std::vector<local_int_t> firstRowOfBlock;
+  std::vector<local_int_t> nonzerosInChunk;
+  std::vector<std::vector<local_int_t> > tdg;
+  std::vector<local_int_t> numberOfBlocksInColor;
 
+  bool TDG;
+  local_int_t blockSize;
+  local_int_t chunkSize;
+  local_int_t numberOfChunks;
+  local_int_t numberOfColors;
+  local_int_t numberOfBlocks;
+  
 #ifndef HPCG_NO_MPI
   local_int_t numberOfExternalValues; //!< number of entries that are external to this process
   int numberOfSendNeighbors; //!< number of neighboring processes that will be send local data

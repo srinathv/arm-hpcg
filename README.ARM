@@ -1,0 +1,23 @@
+################################################################################
+# HPCG TDG + Block Coloring version
+################################################################################
+#
+# Author: Daniel Ruiz <daniel.ruizmunoz@arm.com
+#
+################################################################################
+
+
+This version of the code provies an implementation of the HPCG benchmark which
+uses task dependency graphs to parallelize the SYMGS kernel on the finest level
+of the grid and block coloring for the coarser levels. Merge of blocks is also
+used to present a higher degree of vectorization, even though, no manual
+vectorization is explicitly present on the code.
+
+Only one specific rule must be fulfilled in order to run this code:
+
+	* ny*nz % ((OMP_NUM_THREADS*2)/8) == 0
+
+In order to compile this code, use the Makefile provided in:
+
+	* setup/Make.ARM_TDG_BCOL
+

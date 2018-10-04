@@ -75,6 +75,17 @@ int CG(const SparseMatrix & A, CGData & data, const Vector & b, Vector & x,
   Vector & p = data.p; // Direction vector (in MPI mode ncol>=nrow)
   Vector & Ap = data.Ap;
 
+  // Reorder vectors
+  Vector rOrdered;
+  Vector zOrdered;
+  Vector xOrdered;
+  InitializeVector(rOrdered, r.localLength);
+  InitializeVector(zOrdered, z.localLength);
+  InitializeVector(xOrdered, x.localLength);
+  CopyAndReorderVector(r, rOrdered, A.whichNewRowIsOldRow);
+  CopyAndReorderVector(z, zOrdered, A.whichNewRowIsOldRow);
+  CopyAndReorderVector(x, xOrdered, A.whichNewRowIsOldRow);
+
   if (!doPreconditioning && A.geom->rank==0) HPCG_fout << "WARNING: PERFORMING UNPRECONDITIONED ITERATIONS" << std::endl;
 
 #ifdef HPCG_DEBUG
@@ -83,10 +94,10 @@ int CG(const SparseMatrix & A, CGData & data, const Vector & b, Vector & x,
   if (print_freq<1)  print_freq=1;
 #endif
   // p is of length ncols, copy x to p for sparse MV operation
-  CopyVector(x, p);
+  CopyVector(xOrdered, p);
   TICK(); ComputeSPMV(A, p, Ap); TOCK(t3); // Ap = A*p
-  TICK(); ComputeWAXPBY(nrow, 1.0, b, -1.0, Ap, r, A.isWaxpbyOptimized);  TOCK(t2); // r = b - Ax (x stored in p)
-  TICK(); ComputeDotProduct(nrow, r, r, normr, t4, A.isDotProductOptimized); TOCK(t1);
+  TICK(); ComputeWAXPBY(nrow, 1.0, b, -1.0, Ap, rOrdered, A.isWaxpbyOptimized);  TOCK(t2); // r = b - Ax (x stored in p)
+  TICK(); ComputeDotProduct(nrow, rOrdered, rOrdered, normr, t4, A.isDotProductOptimized); TOCK(t1);
   normr = sqrt(normr);
 #ifdef HPCG_DEBUG
   if (A.geom->rank==0) HPCG_fout << "Initial Residual = "<< normr << std::endl;
@@ -100,27 +111,27 @@ int CG(const SparseMatrix & A, CGData & data, const Vector & b, Vector & x,
   for (int k=1; k<=max_iter && normr/normr0 > tolerance; k++ ) {
     TICK();
     if (doPreconditioning)
-      ComputeMG(A, r, z); // Apply preconditioner
+      ComputeMG(A, rOrdered, zOrdered); // Apply preconditioner
     else
-      CopyVector (r, z); // copy r to z (no preconditioning)
+      CopyVector (rOrdered, zOrdered); // copy r to z (no preconditioning)
     TOCK(t5); // Preconditioner apply time
 
     if (k == 1) {
-      TICK(); ComputeWAXPBY(nrow, 1.0, z, 0.0, z, p, A.isWaxpbyOptimized); TOCK(t2); // Copy Mr to p
-      TICK(); ComputeDotProduct (nrow, r, z, rtz, t4, A.isDotProductOptimized); TOCK(t1); // rtz = r'*z
+      TICK(); ComputeWAXPBY(nrow, 1.0, zOrdered, 0.0, zOrdered, p, A.isWaxpbyOptimized); TOCK(t2); // Copy Mr to p
+      TICK(); ComputeDotProduct (nrow, rOrdered, zOrdered, rtz, t4, A.isDotProductOptimized); TOCK(t1); // rtz = r'*z
     } else {
       oldrtz = rtz;
-      TICK(); ComputeDotProduct (nrow, r, z, rtz, t4, A.isDotProductOptimized); TOCK(t1); // rtz = r'*z
+      TICK(); ComputeDotProduct (nrow, rOrdered, zOrdered, rtz, t4, A.isDotProductOptimized); TOCK(t1); // rtz = r'*z
       beta = rtz/oldrtz;
-      TICK(); ComputeWAXPBY (nrow, 1.0, z, beta, p, p, A.isWaxpbyOptimized);  TOCK(t2); // p = beta*p + z
+      TICK(); ComputeWAXPBY (nrow, 1.0, zOrdered, beta, p, p, A.isWaxpbyOptimized);  TOCK(t2); // p = beta*p + z
     }
 
     TICK(); ComputeSPMV(A, p, Ap); TOCK(t3); // Ap = A*p
     TICK(); ComputeDotProduct(nrow, p, Ap, pAp, t4, A.isDotProductOptimized); TOCK(t1); // alpha = p'*Ap
     alpha = rtz/pAp;
-    TICK(); ComputeWAXPBY(nrow, 1.0, x, alpha, p, x, A.isWaxpbyOptimized);// x = x + alpha*p
-            ComputeWAXPBY(nrow, 1.0, r, -alpha, Ap, r, A.isWaxpbyOptimized);  TOCK(t2);// r = r - alpha*Ap
-    TICK(); ComputeDotProduct(nrow, r, r, normr, t4, A.isDotProductOptimized); TOCK(t1);
+    TICK(); ComputeWAXPBY(nrow, 1.0, xOrdered, alpha, p, xOrdered, A.isWaxpbyOptimized);// x = x + alpha*p
+            ComputeWAXPBY(nrow, 1.0, rOrdered, -alpha, Ap, rOrdered, A.isWaxpbyOptimized);  TOCK(t2);// r = r - alpha*Ap
+    TICK(); ComputeDotProduct(nrow, rOrdered, rOrdered, normr, t4, A.isDotProductOptimized); TOCK(t1);
     normr = sqrt(normr);
 #ifdef HPCG_DEBUG
     if (A.geom->rank==0 && (k%print_freq == 0 || k == max_iter))
@@ -128,6 +139,14 @@ int CG(const SparseMatrix & A, CGData & data, const Vector & b, Vector & x,
 #endif
     niters = k;
   }
+
+  // Reorder back vectors
+  CopyAndReorderVector(rOrdered, r, A.whichOldRowIsNewRow);
+  CopyAndReorderVector(zOrdered, z, A.whichOldRowIsNewRow);
+  CopyAndReorderVector(xOrdered, x, A.whichOldRowIsNewRow);
+  DeleteVector(rOrdered);
+  DeleteVector(zOrdered);
+  DeleteVector(xOrdered);
 
   // Store times
   times[1] += t1; // dot-product time
