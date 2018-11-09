@@ -156,7 +156,7 @@ int ComputeSYMGS_BLOCK( const SparseMatrix & A, const Vector & r, Vector & x ) {
 
 	assert(x.localLength >= A.localNumberOfColumns);
 	
-#ifndef HPCG_NO_OPENMP
+#ifndef HPCG_NO_MPI
 	ExchangeHalo(A, x);
 #endif
 
@@ -187,27 +187,26 @@ int ComputeSYMGS_BLOCK( const SparseMatrix & A, const Vector & r, Vector & x ) {
 				local_int_t first = A.chunkSize * chunk;
 				local_int_t last = first + A.chunkSize;
 
-				for ( local_int_t i = first; i < last; i+= (A.chunkSize/2)) {
-					double sum0 = rv[i+0];
-					double sum1 = rv[i+1];
-					double sum2 = rv[i+2];
-					double sum3 = rv[i+3];
+				local_int_t i = first;
+				double sum0 = rv[i+0];
+				double sum1 = rv[i+1];
+				double sum2 = rv[i+2];
+				double sum3 = rv[i+3];
 
-					for ( local_int_t j = 0; j < A.nonzerosInChunk[chunk]; j++ ) {
-						sum0 -= A.matrixValues[i+0][j] * xv[A.mtxIndL[i+0][j]];
-						sum1 -= A.matrixValues[i+1][j] * xv[A.mtxIndL[i+1][j]];
-						sum2 -= A.matrixValues[i+2][j] * xv[A.mtxIndL[i+2][j]];
-						sum3 -= A.matrixValues[i+3][j] * xv[A.mtxIndL[i+3][j]];
-					}
-					sum0 += matrixDiagonal[i+0][0] * xv[i+0];
-					xv[i+0] = sum0 / matrixDiagonal[i+0][0];
-					sum1 += matrixDiagonal[i+1][1] * xv[i+1];
-					xv[i+1] = sum1 / matrixDiagonal[i+1][0];
-					sum2 += matrixDiagonal[i+2][2] * xv[i+2];
-					xv[i+2] = sum2 / matrixDiagonal[i+2][0];
-					sum3 += matrixDiagonal[i+3][3] * xv[i+3];
-					xv[i+3] = sum3 / matrixDiagonal[i+3][0];
+				for ( local_int_t j = 0; j < A.nonzerosInChunk[chunk]; j++ ) {
+					sum0 -= A.matrixValues[i+0][j] * xv[A.mtxIndL[i+0][j]];
+					sum1 -= A.matrixValues[i+1][j] * xv[A.mtxIndL[i+1][j]];
+					sum2 -= A.matrixValues[i+2][j] * xv[A.mtxIndL[i+2][j]];
+					sum3 -= A.matrixValues[i+3][j] * xv[A.mtxIndL[i+3][j]];
 				}
+				sum0 += matrixDiagonal[i+0][0] * xv[i+0];
+				xv[i+0] = sum0 / matrixDiagonal[i+0][0];
+				sum1 += matrixDiagonal[i+1][1] * xv[i+1];
+				xv[i+1] = sum1 / matrixDiagonal[i+1][0];
+				sum2 += matrixDiagonal[i+2][2] * xv[i+2];
+				xv[i+2] = sum2 / matrixDiagonal[i+2][0];
+				sum3 += matrixDiagonal[i+3][3] * xv[i+3];
+				xv[i+3] = sum3 / matrixDiagonal[i+3][0];
 			}
 		}
 	}
@@ -234,30 +233,29 @@ int ComputeSYMGS_BLOCK( const SparseMatrix & A, const Vector & r, Vector & x ) {
 				local_int_t first = A.chunkSize * chunk;
 				local_int_t last = first + A.chunkSize;
 
-				for ( local_int_t i = last-1; i >= first; i -= (A.chunkSize/2)) {
-					double sum3 = rv[i-3];
-					double sum2 = rv[i-2];
-					double sum1 = rv[i-1];
-					double sum0 = rv[i  ];
+				local_int_t i = last-1;
+				double sum3 = rv[i-3];
+				double sum2 = rv[i-2];
+				double sum1 = rv[i-1];
+				double sum0 = rv[i  ];
 
-					for ( local_int_t j = A.nonzerosInChunk[chunk]-1; j >= 0; j-- ) {
-						sum3 -= A.matrixValues[i-3][j] * xv[A.mtxIndL[i-3][j]];
-						sum2 -= A.matrixValues[i-2][j] * xv[A.mtxIndL[i-2][j]];
-						sum1 -= A.matrixValues[i-1][j] * xv[A.mtxIndL[i-1][j]];
-						sum0 -= A.matrixValues[i  ][j] * xv[A.mtxIndL[i  ][j]];
-					}
-					sum3 += matrixDiagonal[i-3][0] * xv[i-3];
-					xv[i-3] = sum3 / matrixDiagonal[i-3][0];
-
-					sum2 += matrixDiagonal[i-2][1] * xv[i-2];
-					xv[i-2] = sum2 / matrixDiagonal[i-2][0];
-
-					sum1 += matrixDiagonal[i-1][2] * xv[i-1];
-					xv[i-1] = sum1 / matrixDiagonal[i-1][0];
-
-					sum0 += matrixDiagonal[i  ][3] * xv[i  ];
-					xv[i  ] = sum0 / matrixDiagonal[i  ][0];
+				for ( local_int_t j = A.nonzerosInChunk[chunk]-1; j >= 0; j-- ) {
+					sum3 -= A.matrixValues[i-3][j] * xv[A.mtxIndL[i-3][j]];
+					sum2 -= A.matrixValues[i-2][j] * xv[A.mtxIndL[i-2][j]];
+					sum1 -= A.matrixValues[i-1][j] * xv[A.mtxIndL[i-1][j]];
+					sum0 -= A.matrixValues[i  ][j] * xv[A.mtxIndL[i  ][j]];
 				}
+				sum3 += matrixDiagonal[i-3][0] * xv[i-3];
+				xv[i-3] = sum3 / matrixDiagonal[i-3][0];
+
+				sum2 += matrixDiagonal[i-2][1] * xv[i-2];
+				xv[i-2] = sum2 / matrixDiagonal[i-2][0];
+
+				sum1 += matrixDiagonal[i-1][2] * xv[i-1];
+				xv[i-1] = sum1 / matrixDiagonal[i-1][0];
+
+				sum0 += matrixDiagonal[i  ][3] * xv[i  ];
+				xv[i  ] = sum0 / matrixDiagonal[i  ][0];
 			}
 		}
 	}

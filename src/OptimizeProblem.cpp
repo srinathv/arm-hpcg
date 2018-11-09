@@ -40,12 +40,7 @@ int OptimizeCoarseProblem(SparseMatrix & A) {
 
 	local_int_t nyPerBlock = 1; // i.e., how many whole-NX is a block
 	A.blockSize = A.geom->nx * nyPerBlock;
-	A.chunkSize = 8;
-
-	// Make sure we can have at least two super blocks per thread (1 super block == 8 blocks)
-	assert( (A.geom->ny*A.geom->nz) % ((A.geom->numThreads*2) * A.chunkSize) == 0);
-
-	local_int_t targetNumberOfColors = (A.geom->ny * A.geom->nz) / ((A.geom->numThreads*2) * A.chunkSize);
+	A.chunkSize = 4;
 
 	// How many blocks we found in each direction?
 	local_int_t blocksInX = 1; // at least, one block has NX rows
@@ -54,6 +49,11 @@ int OptimizeCoarseProblem(SparseMatrix & A) {
 
 	local_int_t numberOfBlocks = nrow / A.blockSize;
 	A.numberOfBlocks = numberOfBlocks;
+
+	assert( A.numberOfBlocks % A.chunkSize == 0 );
+	assert( (A.numberOfBlocks / A.chunkSize) % A.geom->numThreads == 0);
+	local_int_t targetNumberOfColors = (A.numberOfBlocks/A.chunkSize) / A.geom->numThreads;
+	assert( targetNumberOfColors >= 2 );
 
 	A.firstRowOfBlock = std::vector<local_int_t>(numberOfBlocks);
 	for ( local_int_t i = 0, ii = 0; i < nrow; i+= A.blockSize, ii++ ) {
@@ -370,8 +370,6 @@ int OptimizeProblem(SparseMatrix & A, CGData & data, Vector & b, Vector & x, Vec
 			}
 		}
 
-		//std::sort(rowsInLevel.begin(), rowsInLevel.end());
-		
 		// Add the just created level to the TDG structure
 		A.tdg.push_back(rowsInLevel);
 	}
