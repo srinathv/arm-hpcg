@@ -13,11 +13,12 @@ of the grid and block coloring for the coarser levels. Merge of blocks is also
 used to present a higher degree of vectorization, even though, no manual
 vectorization is explicitly present on the code.
 
-Only one specific rule must be fulfilled in order to run this code:
+The following rules must be fulfilled in every level of the grid in order to
+run this code:
 
-	* ny*nz % ((OMP_NUM_THREADS*2)/8) == 0
+	* For each level of the grid, NX, NY and NZ must be divisible by 2
 
-In order to compile this code, use the Makefile provided in:
+In order to compile this code, use the Makefile provided:
 
 	* setup/Make.ARM_TDG_BCOL
 

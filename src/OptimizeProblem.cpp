@@ -19,6 +19,9 @@
   */
 
 #include "OptimizeProblem.hpp"
+#ifdef HPCG_USE_SPMV_ARMPL
+#include "armpl_sparse.h"
+#endif
 
 /*!
   Optimizes the data structures used for CG iteration to increase the
@@ -40,7 +43,6 @@ int OptimizeCoarseProblem(SparseMatrix & A) {
 
 	local_int_t nyPerBlock = 1; // i.e., how many whole-NX is a block
 	A.blockSize = A.geom->nx * nyPerBlock;
-	A.chunkSize = 4;
 
 	// How many blocks we found in each direction?
 	local_int_t blocksInX = 1; // at least, one block has NX rows
@@ -50,10 +52,26 @@ int OptimizeCoarseProblem(SparseMatrix & A) {
 	local_int_t numberOfBlocks = nrow / A.blockSize;
 	A.numberOfBlocks = numberOfBlocks;
 
-	assert( A.numberOfBlocks % A.chunkSize == 0 );
-	assert( (A.numberOfBlocks / A.chunkSize) % A.geom->numThreads == 0);
-	local_int_t targetNumberOfColors = (A.numberOfBlocks/A.chunkSize) / A.geom->numThreads;
-	assert( targetNumberOfColors >= 2 );
+	// Our target is to have two colors per each X-Y plane
+	// If not possible, then we will repeat colors at some point
+	local_int_t targetNumberOfColors = (2*A.geom->nz);
+	if ( A.numberOfBlocks % targetNumberOfColors != 0 ) {
+		targetNumberOfColors = A.geom->nz;
+	}
+
+	local_int_t blocksPerColor = A.numberOfBlocks / targetNumberOfColors;
+
+	// Find  a good chunkSize
+	if ( blocksPerColor % 4 == 0 ) {
+		A.chunkSize = 4;
+	} else if ( blocksPerColor % 2 == 0 ) {
+		A.chunkSize = 2;
+	} else {
+		A.chunkSize = 1;
+	}
+
+	assert ( A.numberOfBlocks % A.chunkSize == 0 );
+	assert ( targetNumberOfColors % 2 == 0 );
 
 	A.firstRowOfBlock = std::vector<local_int_t>(numberOfBlocks);
 	for ( local_int_t i = 0, ii = 0; i < nrow; i+= A.blockSize, ii++ ) {
@@ -132,10 +150,11 @@ int OptimizeCoarseProblem(SparseMatrix & A) {
 	if ( totalColors < targetNumberOfColors ) {
 		local_int_t colorIncrement = targetNumberOfColors - totalColors;
 		for ( local_int_t i = 0; i < numberOfBlocks; i += 2*blocksInX*blocksInY ) {
-			colorIncrement = colorIncrement == (targetNumberOfColors - totalColors) ? 0 : colorIncrement + 4;
-			for ( local_int_t ii = i; ii < i + 2*blocksInX*blocksInY; ii++ ) {
+			colorIncrement = colorIncrement >= (targetNumberOfColors - totalColors) ? 0 : colorIncrement + 4;
+			for ( local_int_t ii = i; ii < i + blocksInX*blocksInY; ii++ ) {
 				colors[ii] += colorIncrement;
 			}
+
 		}
 		totalColors = targetNumberOfColors;
 	}
@@ -259,6 +278,41 @@ int OptimizeCoarseProblem(SparseMatrix & A) {
 		local_int_t orig = A.elementsToSend[i];
 		A.elementsToSend[i] = A.whichNewRowIsOldRow[orig];
 	}
+#endif
+
+#ifdef HPCG_USE_SPMV_ARMPL
+	// Create the temporary data structures that will be copied (flags=0) inside the create call
+	local_int_t m = A.localNumberOfRows;
+	local_int_t n = A.localNumberOfColumns;
+	
+	local_int_t nnz = A.localNumberOfNonzeros;
+
+	armpl_int_t *row_ptr = (armpl_int_t*) std::malloc((m+1)*sizeof(armpl_int_t));
+	armpl_int_t *col_idx = (armpl_int_t*) std::malloc(nnz*sizeof(armpl_int_t));
+	double *vals = (double*) std::malloc(nnz*sizeof(double));
+
+	row_ptr[0] = 0;
+	for ( local_int_t i = 0; i < m; i++ ) {
+		row_ptr[i+1] = row_ptr[i] + A.nonzerosInRow[i];
+	}
+
+	global_int_t k = 0;
+	for ( local_int_t i = 0; i < m; i++ ) {
+		for ( local_int_t j = 0; j < A.nonzerosInRow[i]; j++ ) {
+			col_idx[k] = A.mtxIndL[i][j];
+			vals[k++] = A.matrixValues[i][j];
+		}
+	}
+
+	armpl_int_t flags = 0;
+	armpl_spmat_create_csr_d(&A.armpl_mat, m, n, row_ptr, col_idx, vals, flags);
+
+	free(row_ptr);
+	free(col_idx);
+	free(vals);
+
+	armpl_spmat_hint(A.armpl_mat, ARMPL_SPARSE_HINT_STRUCTURE, ARMPL_SPARSE_STRUCTURE_HPCG);
+	armpl_spmv_optimize(A.armpl_mat);
 #endif
 
 	if ( A.mgData != 0 ) {
@@ -468,6 +522,41 @@ int OptimizeProblem(SparseMatrix & A, CGData & data, Vector & b, Vector & x, Vec
 	InitializeVector(bReorder, b.localLength);
 	CopyVector(b, bReorder);
 	CopyAndReorderVector(bReorder, b, A.whichNewRowIsOldRow);
+
+#ifdef HPCG_USE_SPMV_ARMPL
+	// Create the temporary data structures that will be copied (flags=0) inside the create call
+	local_int_t m = A.localNumberOfRows;
+	local_int_t n = A.localNumberOfColumns;
+	
+	local_int_t nnz = A.localNumberOfNonzeros;
+
+	armpl_int_t *row_ptr = (armpl_int_t*) std::malloc((m+1)*sizeof(armpl_int_t));
+	armpl_int_t *col_idx = (armpl_int_t*) std::malloc(nnz*sizeof(armpl_int_t));
+	double *vals = (double*) std::malloc(nnz*sizeof(double));
+
+	row_ptr[0] = 0;
+	for ( local_int_t i = 0; i < m; i++ ) {
+		row_ptr[i+1] = row_ptr[i] + A.nonzerosInRow[i];
+	}
+
+	global_int_t k = 0;
+	for ( local_int_t i = 0; i < m; i++ ) {
+		for ( local_int_t j = 0; j < A.nonzerosInRow[i]; j++ ) {
+			col_idx[k] = A.mtxIndL[i][j];
+			vals[k++] = A.matrixValues[i][j];
+		}
+	}
+
+	armpl_int_t flags = 0;
+	armpl_spmat_create_csr_d(&A.armpl_mat, m, n, row_ptr, col_idx, vals, flags);
+
+	free(row_ptr);
+	free(col_idx);
+	free(vals);
+
+	armpl_spmat_hint(A.armpl_mat, ARMPL_SPARSE_HINT_STRUCTURE, ARMPL_SPARSE_STRUCTURE_HPCG);
+	armpl_spmv_optimize(A.armpl_mat);
+#endif
 
 	if ( A.mgData != 0 ) {
 		// Translate f2cOperator values

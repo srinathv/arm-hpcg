@@ -24,6 +24,9 @@
 #ifndef HPCG_NO_MPI
 #include "ExchangeHalo.hpp"
 #endif
+#ifdef HPCG_USE_SPMV_ARMPL
+#include "armpl_sparse.h"
+#endif
 
 int ComputeSPMV( const SparseMatrix & A, Vector & x, Vector & y) {
 
@@ -37,6 +40,12 @@ int ComputeSPMV( const SparseMatrix & A, Vector & x, Vector & y) {
 	double * const yv = y.values;
 	const local_int_t nrow = A.localNumberOfRows;
 
+#ifdef HPCG_USE_SPMV_ARMPL
+	double alpha = 1.0;
+	double beta = 0.0;
+
+	armpl_spmv_exec_d(ARMPL_SPARSE_OPERATION_NOTRANS, alpha, A.armpl_mat, xv, beta, yv);
+#else
 #ifndef HPCG_NO_OPENMP
 #pragma omp parallel for
 #endif
@@ -48,6 +57,7 @@ int ComputeSPMV( const SparseMatrix & A, Vector & x, Vector & y) {
 		}
 		yv[i] = sum;
 	}
+#endif
 
 	return 0;
 }

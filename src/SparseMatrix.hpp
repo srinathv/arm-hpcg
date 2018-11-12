@@ -36,6 +36,9 @@ typedef std::map< global_int_t, local_int_t > GlobalToLocalMap;
 #include <unordered_map>
 using GlobalToLocalMap = std::unordered_map< global_int_t, local_int_t >;
 #endif
+#ifdef HPCG_USE_SPMV_ARMPL
+#include "armpl_sparse.h"
+#endif
 
 struct SparseMatrix_STRUCT {
   char  * title; //!< name of the sparse matrix
@@ -79,6 +82,10 @@ struct SparseMatrix_STRUCT {
   local_int_t numberOfChunks;
   local_int_t numberOfColors;
   local_int_t numberOfBlocks;
+
+#ifdef HPCG_USE_SPMV_ARMPL
+  armpl_spmat_t armpl_mat;
+#endif
   
 #ifndef HPCG_NO_MPI
   local_int_t numberOfExternalValues; //!< number of entries that are external to this process
@@ -111,6 +118,9 @@ inline void InitializeSparseMatrix(SparseMatrix & A, Geometry * geom) {
   A.mtxIndL = 0;
   A.matrixValues = 0;
   A.matrixDiagonal = 0;
+#ifdef HPCG_USE_SPMV_ARMPL
+  A.armpl_mat = 0;
+#endif
 
   // Optimization is ON by default. The code that switches it OFF is in the
   // functions that are meant to be optimized.
@@ -158,6 +168,15 @@ inline void ReplaceMatrixDiagonal(SparseMatrix & A, Vector & diagonal) {
     double * dv = diagonal.values;
     assert(A.localNumberOfRows==diagonal.localLength);
     for (local_int_t i=0; i<A.localNumberOfRows; ++i) *(curDiagA[i]) = dv[i];
+#ifdef HPCG_USE_SPMV_ARMPL
+	// Replace matrix diagonal also on the ArmPL matrix
+	std::vector<armpl_int_t> col_idx(A.localNumberOfRows);
+	for ( armpl_int_t i = 0; i < A.localNumberOfRows; i++ ) {
+		col_idx[i] = i;
+	}
+	std::vector<armpl_int_t> row_idx = col_idx;
+	armpl_spmat_update_d(A.armpl_mat, A.localNumberOfRows, row_idx.data(), col_idx.data(), dv);
+#endif
   return;
 }
 /*!
