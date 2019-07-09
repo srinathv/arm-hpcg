@@ -209,7 +209,7 @@ void ReportResults(const SparseMatrix & A, int numberOfMgLevels, int numberOfCgS
 
     // Instantiate YAML document
     //OutputFile doc("HPCG-Benchmark", "3.0");
-	char execConf[25];
+	char execConf[128];
 	sprintf(execConf, "%dranks-%dthreads", A.geom->size, A.geom->numThreads);
 	OutputFile doc(execConf, "HPCG-Benchmark_3.0");
     doc.add("Release date", "November 11, 2015");
